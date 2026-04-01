@@ -757,10 +757,24 @@ export default function App() {
                   border: "1px solid rgba(168,85,247,0.25)",
                 }}
               >
-                <strong>Teaching point:</strong> more search days can help, but they
-                are costly. Statistical modelling can do better by estimating
-                detection probability and accounting for survey effort, rather than
-                relying only on expensive repeat searching.
+                <strong>Why this matters:</strong> More searching can move the estimate closer to the truth, but it takes time and effort. In real monitoring, statistical models can help separate true presence from imperfect detection and account for differences in survey effort. However, they still depend on having enough well-designed data to produce reliable results.
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
+                <strong>Interested in applying this to real-world monitoring?</strong>
+                <div style={{ marginTop: 6 }}>
+                  Get in touch to discuss survey design, effort allocation, and modelling approaches:
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  southernclaritynz@gmail.com
+                </div>
               </div>
 
               <p style={{ marginTop: 14, marginBottom: 0 }}>
