@@ -376,16 +376,16 @@ export default function App() {
     ).length;
   }, [cells]);
 
-  const daysUsed = viewMode === "truth" ? resultSummary.days : dayIndex + 1;
+  const daysUsed = gameFinished ? resultSummary.days : dayIndex + 1;
 
   const currentNaiveEstimate = useMemo(() => {
-    if (viewMode === "truth") {
+    if (gameFinished) {
       return resultSummary.naiveEstimate ?? 0;
     }
-    const index = dayIndex - 1;
+    const index = dayIndex;
     if (index < 0 || !naiveByDay[index]) return 0;
     return naiveByDay[index].naive;
-  }, [naiveByDay, dayIndex, viewMode, resultSummary.naiveEstimate]);
+  }, [naiveByDay, dayIndex, gameFinished, resultSummary.naiveEstimate]);
 
   const chocolateLeft = useMemo(() => {
     const used = clamp(daysUsed / MAX_CHOCOLATE_DAYS, 0, 1);
@@ -418,9 +418,9 @@ export default function App() {
     setShowResults(true);
 
     setMessage(
-      `Game over. You found ${finalFoundEggs} egg${finalFoundEggs === 1 ? "" : "s"}. True egg-hiding rate was ${(trueEggRate * 100).toFixed(
+      `Game over. You detected eggs in ${finalFoundEggs} cell${finalFoundEggs === 1 ? "" : "s"}. True egg-hiding rate was ${(trueEggRate * 100).toFixed(
         0
-      )}%, but your naive estimate based on eggs found after ${finalDaysUsed} day${finalDaysUsed === 1 ? "" : "s"} was ${(finalNaive * 100).toFixed(
+      )}%, but your naive estimate after ${finalDaysUsed} day${finalDaysUsed === 1 ? "" : "s"} was ${(finalNaive * 100).toFixed(
         0
       )}%.`
     );
@@ -631,7 +631,7 @@ export default function App() {
               </p>
               <p>
                 Your job is to decide how much searching is worth it. More search
-                days usually improve your naive estimate of how many eggs are hidden, but
+                days can improve your naive estimate of how many eggs are hidden, but
                 each extra day leaves less time to enjoy your Easter chocolate.
               </p>
 
@@ -812,8 +812,8 @@ export default function App() {
             >
               <p style={{ marginTop: 0 }}>
                 After <strong>{resultSummary.days}</strong> search day
-                {resultSummary.days === 1 ? "" : "s"}, you found{" "}
-                <strong>{resultSummary.foundEggs}</strong> egg
+                {resultSummary.days === 1 ? "" : "s"}, you detected eggs in{" "}
+                <strong>{resultSummary.foundEggs}</strong> cell
                 {resultSummary.foundEggs === 1 ? "" : "s"}.
               </p>
 
@@ -833,7 +833,7 @@ export default function App() {
                   <strong>{(resultSummary.trueEggRate * 100).toFixed(0)}%</strong>
                 </div>
                 <div style={{ marginBottom: 4 }}>
-                  Naive estimate (based on eggs found):{" "}
+                  Naive estimate (proportion of cells with &gt;=1 egg detected):{" "}
                   <strong>{(resultSummary.naiveEstimate * 100).toFixed(0)}%</strong>
                 </div>
                 <div style={{ marginBottom: 4 }}>
