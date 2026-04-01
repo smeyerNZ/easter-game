@@ -409,7 +409,7 @@ export default function App() {
     }
 
     if (alreadyToday > 0 && emptyNow === 0) {
-      setMessage("You already scanned most of that area today. Try another part of the garden.");
+      setMessage("You already scanned most of that area today. Each cell can only be surveyed once per day, so try another part of the garden or click Next day.");
       return;
     }
 
@@ -587,6 +587,22 @@ export default function App() {
                 </div>
                 <div>
                   <strong>Detection setting:</strong> change how easy or hard eggs are to spot once they are there, without moving the eggs.
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
+                <div style={{ marginBottom: 6 }}>
+                  <strong>Important gameplay note</strong>
+                </div>
+                <div>
+                  Each cell can only be surveyed once per day. If you click overlapping areas on the same day, any cells already checked will not be surveyed again until the next day.
                 </div>
               </div>
 
@@ -942,6 +958,9 @@ export default function App() {
             <strong>Detection setting:</strong> this changes how easy eggs are to find, but does not change where eggs are hidden.
           </p>
           <p style={{ margin: "6px 0" }}>
+            <strong>Search rule:</strong> each cell can only be surveyed once per day, so overlapping scans on the same day do not re-check the same cell.
+          </p>
+          <p style={{ margin: "6px 0" }}>
             <strong>Search view:</strong> turquoise patches were scanned, yellow patches had eggs detected.
           </p>
           <p style={{ margin: "6px 0" }}>
@@ -950,6 +969,19 @@ export default function App() {
           <p style={{ margin: "6px 0" }}>
             <strong>Teaching point:</strong> repeated search days make the estimate move closer to the true egg-hiding rate, but they cost time.
           </p>
+        </div>
+
+        <div
+          style={{
+            marginTop: 30,
+            paddingTop: 12,
+            borderTop: "1px solid rgba(255,255,255,0.1)",
+            textAlign: "center",
+            fontSize: 12,
+            color: "rgba(255,255,255,0.6)",
+          }}
+        >
+          Created by Southern Clarity NZ
         </div>
       </div>
     </div>
