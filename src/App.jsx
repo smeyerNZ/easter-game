@@ -527,17 +527,22 @@ export default function App() {
             justifyContent: "center",
             padding: 16,
             zIndex: 999,
+            overflowY: "auto",
           }}
         >
           <div
             style={{
               width: "100%",
               maxWidth: 680,
+              maxHeight: "85vh",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
               background: "#111827",
               border: "1px solid rgba(255,255,255,0.12)",
               borderRadius: 18,
               padding: isMobile ? 18 : 24,
               boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
+              boxSizing: "border-box",
             }}
           >
             <h2
