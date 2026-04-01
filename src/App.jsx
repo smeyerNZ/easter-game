@@ -234,6 +234,8 @@ export default function App() {
   );
   const [showIntro, setShowIntro] = useState(true);
   const [showResults, setShowResults] = useState(false);
+  const [showEndOfDay, setShowEndOfDay] = useState(false);
+  const [gameFinished, setGameFinished] = useState(false);
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200
   );
@@ -276,6 +278,8 @@ export default function App() {
     setSearchesLeft(SEARCHES_PER_DAY);
     setViewMode("search");
     setShowResults(false);
+    setShowEndOfDay(false);
+    setGameFinished(false);
     setMessage(nextMessage);
   }
 
@@ -290,6 +294,8 @@ export default function App() {
     setSearchesLeft(SEARCHES_PER_DAY);
     setViewMode("search");
     setShowResults(false);
+    setShowEndOfDay(false);
+    setGameFinished(false);
     setMessage(
       "Search days updated. The garden stayed the same, so the true egg-hiding rate did not change."
     );
@@ -333,7 +339,7 @@ export default function App() {
       days,
       detectionMode,
       hidingMode,
-      "New garden generated. Try different egg-hiding levels, detection settings, and search days to see how your estimate changes."
+      "New garden generated. Try different egg-hiding levels, detection settings, and search days to see how your naive estimate changes."
     );
   }
 
@@ -370,22 +376,64 @@ export default function App() {
     ).length;
   }, [cells]);
 
-  const daysUsed = viewMode === "truth" ? days : dayIndex + 1;
+  const daysUsed = viewMode === "truth" ? resultSummary.days : dayIndex + 1;
 
   const currentNaiveEstimate = useMemo(() => {
-    const index = viewMode === "truth" ? days - 1 : dayIndex - 1;
+    if (viewMode === "truth") {
+      return resultSummary.naiveEstimate ?? 0;
+    }
+    const index = dayIndex - 1;
     if (index < 0 || !naiveByDay[index]) return 0;
     return naiveByDay[index].naive;
-  }, [naiveByDay, dayIndex, days, viewMode]);
+  }, [naiveByDay, dayIndex, viewMode, resultSummary.naiveEstimate]);
 
   const chocolateLeft = useMemo(() => {
     const used = clamp(daysUsed / MAX_CHOCOLATE_DAYS, 0, 1);
     return 1 - used;
   }, [daysUsed]);
 
+  function finishGame(finalDaysUsed = dayIndex + 1) {
+    const naiveIndex = Math.max(0, finalDaysUsed - 1);
+    const finalNaive = naiveByDay[naiveIndex]?.naive ?? 0;
+    const finalFoundEggs = cells.filter((c) =>
+      c.history.slice(0, finalDaysUsed).some((v) => v === 1)
+    ).length;
+    const finalMissedEggCount = cells.filter(
+      (c) => c.hasEgg && !c.history.slice(0, finalDaysUsed).some((v) => v === 1)
+    ).length;
+    const finalChocolateLeft =
+      1 - clamp(finalDaysUsed / MAX_CHOCOLATE_DAYS, 0, 1);
+
+    setShowEndOfDay(false);
+    setViewMode("truth");
+    setGameFinished(true);
+    setResultSummary({
+      trueEggRate,
+      naiveEstimate: finalNaive,
+      foundEggs: finalFoundEggs,
+      missedEggCount: finalMissedEggCount,
+      chocolateLeft: finalChocolateLeft,
+      days: finalDaysUsed,
+    });
+    setShowResults(true);
+
+    setMessage(
+      `Game over. You found ${finalFoundEggs} egg${finalFoundEggs === 1 ? "" : "s"}. True egg-hiding rate was ${(trueEggRate * 100).toFixed(
+        0
+      )}%, but your naive estimate based on eggs found after ${finalDaysUsed} day${finalDaysUsed === 1 ? "" : "s"} was ${(finalNaive * 100).toFixed(
+        0
+      )}%.`
+    );
+  }
+
   function searchArea(cellId) {
+    if (gameFinished) {
+      return;
+    }
+
     if (searchesLeft <= 0) {
-      setMessage("No scans left today. Click Next day.");
+      setShowEndOfDay(true);
+      setMessage("No scans left today. Continue from the popup.");
       return;
     }
 
@@ -427,6 +475,10 @@ export default function App() {
 
     const areaLabel = `around row ${cy + 1}, col ${cx + 1}`;
 
+    if (nextSearchesLeft === 0) {
+      setShowEndOfDay(true);
+    }
+
     if (foundNow > 0) {
       setMessage(
         `Scan ${areaLabel}: found ${foundNow} egg${foundNow > 1 ? "s" : ""}. Missed ${missedNow} hidden egg patch${missedNow === 1 ? "" : "es"}.`
@@ -443,7 +495,7 @@ export default function App() {
 
     if (alreadyToday > 0 && emptyNow === 0) {
       setMessage(
-        "You already scanned most of that area today. Each cell can only be surveyed once per day, so try another part of the garden or click Next day."
+        "You already scanned most of that area today. Each cell can only be surveyed once per day, so try another part of the garden."
       );
       return;
     }
@@ -459,38 +511,17 @@ export default function App() {
   }
 
   function nextDay() {
+    setShowEndOfDay(false);
+
     if (dayIndex >= days - 1) {
-      const finalNaive = naiveByDay[days - 1]?.naive ?? 0;
-      const finalFoundEggs = cells.filter((c) =>
-        c.history.some((v) => v === 1)
-      ).length;
-      const finalChocolateLeft = 1 - clamp(days / MAX_CHOCOLATE_DAYS, 0, 1);
-
-      setViewMode("truth");
-      setResultSummary({
-        trueEggRate,
-        naiveEstimate: finalNaive,
-        foundEggs: finalFoundEggs,
-        missedEggCount,
-        chocolateLeft: finalChocolateLeft,
-        days,
-      });
-      setShowResults(true);
-
-      setMessage(
-        `Game over. You found ${finalFoundEggs} egg${finalFoundEggs === 1 ? "" : "s"}. True egg-hiding rate was ${(trueEggRate * 100).toFixed(
-          0
-        )}%, but your estimate based on eggs found after ${days} days was ${(finalNaive * 100).toFixed(
-          0
-        )}%.`
-      );
+      finishGame(days);
       return;
     }
 
     setDayIndex((d) => d + 1);
     setSearchesLeft(SEARCHES_PER_DAY);
     setMessage(
-      `Day ${dayIndex + 2}: search again. Eggs do not move, but repeat search days can reveal eggs you missed earlier. More search days improve estimates, but leave less time for Easter chocolate.`
+      `Day ${dayIndex + 2}: search again. Eggs do not move, but repeat search days can reveal eggs you missed earlier. More search days can improve the naive estimate, but leave less time for Easter chocolate.`
     );
   }
 
@@ -543,7 +574,7 @@ export default function App() {
       borderRadius: isVerySmall ? 6 : 8,
       border,
       fontSize: cellFontSize,
-      cursor: "pointer",
+      cursor: gameFinished ? "default" : "pointer",
       userSelect: "none",
       transition: "all 120ms ease",
       touchAction: "manipulation",
@@ -600,7 +631,7 @@ export default function App() {
               </p>
               <p>
                 Your job is to decide how much searching is worth it. More search
-                days usually improve your estimate of how many eggs are hidden, but
+                days usually improve your naive estimate of how many eggs are hidden, but
                 each extra day leaves less time to enjoy your Easter chocolate.
               </p>
 
@@ -679,6 +710,73 @@ export default function App() {
         </div>
       )}
 
+      {showEndOfDay && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(2, 6, 23, 0.82)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+            overflowY: "auto",
+          }}
+        >
+          <div style={modalCardStyle(isMobile)}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                fontSize: isMobile ? 24 : 30,
+                lineHeight: 1.15,
+              }}
+            >
+              🌙 End of day
+            </h2>
+
+            <div
+              style={{
+                fontSize: isMobile ? 15 : 17,
+                lineHeight: 1.5,
+                color: "rgba(255,255,255,0.92)",
+              }}
+            >
+              <p style={{ marginTop: 0 }}>
+                You have used all your scans for today.
+              </p>
+              <p>
+                Even if eggs are present, you may still have missed some because detection is imperfect.
+              </p>
+              <p style={{ marginBottom: 0 }}>
+                Searching again tomorrow can reveal eggs you missed today — but it leaves less time for Easter chocolate.
+              </p>
+            </div>
+
+            <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {!gameFinished && dayIndex < days - 1 && (
+                <button
+                  onClick={nextDay}
+                  style={{
+                    ...buttonStyle(true, isMobile),
+                    minWidth: 140,
+                  }}
+                >
+                  Survey next day
+                </button>
+              )}
+              <button
+                onClick={() => finishGame(dayIndex + 1)}
+                style={buttonStyle(false, isMobile)}
+              >
+                Finish game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showResults && (
         <div
           style={{
@@ -735,7 +833,7 @@ export default function App() {
                   <strong>{(resultSummary.trueEggRate * 100).toFixed(0)}%</strong>
                 </div>
                 <div style={{ marginBottom: 4 }}>
-                  Estimate based on eggs found:{" "}
+                  Naive estimate (based on eggs found):{" "}
                   <strong>{(resultSummary.naiveEstimate * 100).toFixed(0)}%</strong>
                 </div>
                 <div style={{ marginBottom: 4 }}>
@@ -753,11 +851,28 @@ export default function App() {
                   marginTop: 14,
                   padding: 12,
                   borderRadius: 12,
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
+                <strong>How the naive estimate is calculated:</strong>
+                <div style={{ marginTop: 6 }}>
+                  The naive estimate is simply the proportion of garden patches where you found at least one egg during your searches.
+                </div>
+                <div style={{ marginTop: 6 }}>
+                  Because eggs can be present but go undetected, this estimate is usually lower than the true egg-hiding rate.
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 12,
                   background: "rgba(168,85,247,0.14)",
                   border: "1px solid rgba(168,85,247,0.25)",
                 }}
               >
-                <strong>Why this matters:</strong> More searching can move the estimate closer to the truth, but it takes time and effort. In real monitoring, statistical models can help separate true presence from imperfect detection and account for differences in survey effort. However, they still depend on having enough well-designed data to produce reliable results.
+                <strong>Why this matters:</strong> More searching can move the naive estimate closer to the truth, but it takes time and effort. In real monitoring, statistical models can help separate true presence from imperfect detection and account for differences in survey effort. However, they still depend on having enough well-designed data to produce reliable results.
               </div>
 
               <div
@@ -924,7 +1039,7 @@ export default function App() {
           </div>
 
           <div style={{ paddingBottom: 8 }}>
-            <strong>Day:</strong> {dayIndex + 1} / {days}
+            <strong>Day:</strong> {Math.min(dayIndex + 1, days)} / {days}
           </div>
 
           <div style={{ paddingBottom: 8 }}>
@@ -1001,9 +1116,6 @@ export default function App() {
                 marginBottom: isMobile ? 12 : 18,
               }}
             >
-              <button onClick={nextDay} style={buttonStyle(false, isMobile)}>
-                Next day
-              </button>
               <button onClick={resetGame} style={buttonStyle(false, isMobile)}>
                 New game
               </button>
@@ -1045,7 +1157,7 @@ export default function App() {
 
             <div style={{ marginBottom: 14 }}>
               <div style={{ marginBottom: 6, fontSize: isMobile ? 15 : 16 }}>
-                Estimate based on eggs found so far: {currentNaiveEstimate.toFixed(2)}
+                Naive estimate based on eggs found so far: {currentNaiveEstimate.toFixed(2)}
               </div>
               <div
                 style={{
@@ -1102,8 +1214,8 @@ export default function App() {
                 lineHeight: 1.4,
               }}
             >
-              <strong>Interpretation:</strong> the estimate based on eggs found is the proportion of cells where you have found at least one egg so far.
-              When detection chance is below 1, this estimate is biased low. More search days improve the estimate, but
+              <strong>Interpretation:</strong> the naive estimate based on eggs found is the proportion of cells where you have found at least one egg so far.
+              When detection chance is below 1, this estimate is biased low. More search days can improve the naive estimate, but
               they also leave less chocolate time.
             </div>
           </div>
@@ -1137,7 +1249,7 @@ export default function App() {
             <strong>Truth view:</strong> yellow = egg hidden and found, red = egg hidden but missed.
           </p>
           <p style={{ margin: "6px 0" }}>
-            <strong>Teaching point:</strong> repeated search days make the estimate move closer to the true egg-hiding rate, but they cost time.
+            <strong>Teaching point:</strong> repeated search days can make the naive estimate move closer to the true egg-hiding rate, but they cost time.
           </p>
         </div>
 
