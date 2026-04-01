@@ -203,6 +203,22 @@ function chocolateBarStyle(value) {
   };
 }
 
+function modalCardStyle(isMobile) {
+  return {
+    width: "100%",
+    maxWidth: 680,
+    maxHeight: "85vh",
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    background: "#111827",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 18,
+    padding: isMobile ? 18 : 24,
+    boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
+    boxSizing: "border-box",
+  };
+}
+
 export default function App() {
   const [days, setDays] = useState(DEFAULT_DAYS);
   const [detectionMode, setDetectionMode] = useState(DEFAULT_DETECTION_MODE);
@@ -217,9 +233,18 @@ export default function App() {
     "Click a garden patch to scan a 3×3 area for Easter eggs. Eggs can be hidden but still go undetected."
   );
   const [showIntro, setShowIntro] = useState(true);
+  const [showResults, setShowResults] = useState(false);
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 1200
   );
+  const [resultSummary, setResultSummary] = useState({
+    trueEggRate: 0,
+    naiveEstimate: 0,
+    foundEggs: 0,
+    missedEggCount: 0,
+    chocolateLeft: 1,
+    days: DEFAULT_DAYS,
+  });
 
   useEffect(() => {
     function handleResize() {
@@ -236,7 +261,13 @@ export default function App() {
   const cellFontSize = isVerySmall ? 16 : isMobile ? 20 : 24;
   const gridGap = isVerySmall ? 4 : 6;
 
-  function startFreshGame(nextCells, nextDays, nextDetectionMode, nextHidingMode, nextMessage) {
+  function startFreshGame(
+    nextCells,
+    nextDays,
+    nextDetectionMode,
+    nextHidingMode,
+    nextMessage
+  ) {
     setCells(nextCells);
     setDays(nextDays);
     setDetectionMode(nextDetectionMode);
@@ -244,6 +275,7 @@ export default function App() {
     setDayIndex(0);
     setSearchesLeft(SEARCHES_PER_DAY);
     setViewMode("search");
+    setShowResults(false);
     setMessage(nextMessage);
   }
 
@@ -257,6 +289,7 @@ export default function App() {
     setDayIndex(newDayIndex);
     setSearchesLeft(SEARCHES_PER_DAY);
     setViewMode("search");
+    setShowResults(false);
     setMessage(
       "Search days updated. The garden stayed the same, so the true egg-hiding rate did not change."
     );
@@ -409,12 +442,16 @@ export default function App() {
     }
 
     if (alreadyToday > 0 && emptyNow === 0) {
-      setMessage("You already scanned most of that area today. Each cell can only be surveyed once per day, so try another part of the garden or click Next day.");
+      setMessage(
+        "You already scanned most of that area today. Each cell can only be surveyed once per day, so try another part of the garden or click Next day."
+      );
       return;
     }
 
     if (nextSearchesLeft === 0) {
-      setMessage(`Scan ${areaLabel}: no eggs found there this time. You have used all scans for today.`);
+      setMessage(
+        `Scan ${areaLabel}: no eggs found there this time. You have used all scans for today.`
+      );
       return;
     }
 
@@ -423,21 +460,29 @@ export default function App() {
 
   function nextDay() {
     if (dayIndex >= days - 1) {
-      setViewMode("truth");
       const finalNaive = naiveByDay[days - 1]?.naive ?? 0;
       const finalFoundEggs = cells.filter((c) =>
         c.history.some((v) => v === 1)
       ).length;
       const finalChocolateLeft = 1 - clamp(days / MAX_CHOCOLATE_DAYS, 0, 1);
 
+      setViewMode("truth");
+      setResultSummary({
+        trueEggRate,
+        naiveEstimate: finalNaive,
+        foundEggs: finalFoundEggs,
+        missedEggCount,
+        chocolateLeft: finalChocolateLeft,
+        days,
+      });
+      setShowResults(true);
+
       setMessage(
         `Game over. You found ${finalFoundEggs} egg${finalFoundEggs === 1 ? "" : "s"}. True egg-hiding rate was ${(trueEggRate * 100).toFixed(
           0
         )}%, but your estimate based on eggs found after ${days} days was ${(finalNaive * 100).toFixed(
           0
-        )}%. You missed ${missedEggCount} hidden egg cell${missedEggCount === 1 ? "" : "s"}, and only ${(finalChocolateLeft * 100).toFixed(
-          0
-        )}% of your Easter chocolate time was left.`
+        )}%.`
       );
       return;
     }
@@ -530,21 +575,7 @@ export default function App() {
             overflowY: "auto",
           }}
         >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 680,
-              maxHeight: "85vh",
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-              background: "#111827",
-              border: "1px solid rgba(255,255,255,0.12)",
-              borderRadius: 18,
-              padding: isMobile ? 18 : 24,
-              boxShadow: "0 20px 50px rgba(0,0,0,0.4)",
-              boxSizing: "border-box",
-            }}
-          >
+          <div style={modalCardStyle(isMobile)}>
             <h2
               style={{
                 marginTop: 0,
@@ -648,6 +679,120 @@ export default function App() {
         </div>
       )}
 
+      {showResults && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(2, 6, 23, 0.82)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 1000,
+            overflowY: "auto",
+          }}
+        >
+          <div style={modalCardStyle(isMobile)}>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                fontSize: isMobile ? 24 : 30,
+                lineHeight: 1.15,
+              }}
+            >
+              🐣 Game results
+            </h2>
+
+            <div
+              style={{
+                fontSize: isMobile ? 15 : 17,
+                lineHeight: 1.5,
+                color: "rgba(255,255,255,0.92)",
+              }}
+            >
+              <p style={{ marginTop: 0 }}>
+                After <strong>{resultSummary.days}</strong> search day
+                {resultSummary.days === 1 ? "" : "s"}, you found{" "}
+                <strong>{resultSummary.foundEggs}</strong> egg
+                {resultSummary.foundEggs === 1 ? "" : "s"}.
+              </p>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 12,
+                  borderRadius: 12,
+                  background: "rgba(255,255,255,0.06)",
+                }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  <strong>What happened?</strong>
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  True egg-hiding rate:{" "}
+                  <strong>{(resultSummary.trueEggRate * 100).toFixed(0)}%</strong>
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  Estimate based on eggs found:{" "}
+                  <strong>{(resultSummary.naiveEstimate * 100).toFixed(0)}%</strong>
+                </div>
+                <div style={{ marginBottom: 4 }}>
+                  Hidden egg cells missed:{" "}
+                  <strong>{resultSummary.missedEggCount}</strong>
+                </div>
+                <div>
+                  Easter chocolate time left:{" "}
+                  <strong>{(resultSummary.chocolateLeft * 100).toFixed(0)}%</strong>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 12,
+                  background: "rgba(168,85,247,0.14)",
+                  border: "1px solid rgba(168,85,247,0.25)",
+                }}
+              >
+                <strong>Teaching point:</strong> more search days can help, but they
+                are costly. Statistical modelling can do better by estimating
+                detection probability and accounting for survey effort, rather than
+                relying only on expensive repeat searching.
+              </div>
+
+              <p style={{ marginTop: 14, marginBottom: 0 }}>
+                Use the <strong>Truth</strong> view to see where eggs were found and
+                where they stayed hidden.
+              </p>
+            </div>
+
+            <div style={{ marginTop: 18, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={() => setShowResults(false)}
+                style={{
+                  ...buttonStyle(true, isMobile),
+                  minWidth: 140,
+                }}
+              >
+                Keep exploring
+              </button>
+              <button
+                onClick={() => {
+                  setShowResults(false);
+                  resetGame();
+                }}
+                style={buttonStyle(false, isMobile)}
+              >
+                New game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           maxWidth: 1200,
@@ -688,19 +833,22 @@ export default function App() {
         >
           <div>
             <div style={{ marginBottom: 6 }}>Search days</div>
-            <input
-              type="number"
-              min="1"
-              max="14"
+            <select
               value={days}
               onChange={(e) => handleDaysChange(e.target.value)}
               style={{
                 padding: 8,
                 borderRadius: 8,
-                width: 80,
+                width: 110,
                 fontSize: isMobile ? 14 : 16,
               }}
-            />
+            >
+              {Array.from({ length: 14 }, (_, i) => i + 1).map((d) => (
+                <option key={d} value={d}>
+                  {d} day{d === 1 ? "" : "s"}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -845,7 +993,10 @@ export default function App() {
               <button onClick={resetGame} style={buttonStyle(false, isMobile)}>
                 New game
               </button>
-              <button onClick={() => setShowIntro(true)} style={buttonStyle(false, isMobile)}>
+              <button
+                onClick={() => setShowIntro(true)}
+                style={buttonStyle(false, isMobile)}
+              >
                 How to play
               </button>
             </div>
