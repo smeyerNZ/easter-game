@@ -1,0 +1,349 @@
+import React, { useEffect, useMemo, useState } from "react";
+
+const GRID = 8;
+const VISITS_TOTAL = 3;
+const STEPS_PER_VISIT = 18;
+
+function logistic(x) {
+  return 1 / (1 + Math.exp(-x));
+}
+
+function clamp(v, lo, hi) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function idFor(x, y) {
+  return `${x}-${y}`;
+}
+
+function makeWorld() {
+  const cells = [];
+
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      const path = y === 0 || x === GRID - 1 ? 1 : 0;
+      const shrub = ((x >= 1 && x <= 2 && y >= 2 && y <= 5) || (x >= 
+5 && y >= 4)) ? 1 : 0;
+      const flower = ((x >= 4 && x <= 6 && y >= 1 && y <= 3) || (x 
+<= 1 && y >= 5)) ? 1 : 0;
+      const wet = ((x === 3 || x === 4) && y >= 5) ? 1 : 0;
+      const edge = x === 0 || y === 0 || x === GRID - 1 || y === 
+GRID - 1 ? 1 : 0;
+
+      const psi = logistic(-1.6 + 0.4 * edge + 1.2 * shrub + 0.8 * 
+flower - 1.3 * wet - 0.5 * path);
+      const occupied = Math.random() < psi;
+      const p = logistic(-0.8 + 0.9 * flower + 0.4 * path - 0.8 * 
+shrub - 0.9 * wet);
+
+      cells.push({
+        id: idFor(x, y),
+        x,
+        y,
+        path,
+        shrub,
+        flower,
+        wet,
+        psi,
+        occupied,
+        p,
+        history: Array(VISITS_TOTAL).fill(null),
+      });
+    }
+  }
+
+  return cells;
+}
+
+function allowedByDesign(cell, design) {
+  if (design === "random") return true;
+  if (design === "systematic") return cell.x % 2 === 0 && cell.y % 2 
+=== 0;
+  if (design === "transect") return cell.x === 1 || cell.x === 4 || 
+cell.y === 6;
+  if (design === "targeted") return cell.shrub || cell.flower;
+  return true;
+}
+
+function estimatePsi(cells) {
+  const rates = { lawn: [0,0], shrub:[0,0], flower:[0,0], wet:[0,0], 
+path:[0,0] };
+
+  function type(c){
+    if (c.wet) return "wet";
+    if (c.path) return "path";
+    if (c.shrub) return "shrub";
+    if (c.flower) return "flower";
+    return "lawn";
+  }
+
+  cells.forEach(c=>{
+    const t = type(c);
+    const sampled = c.history.filter(v=>v!==null).length;
+    const det = c.history.filter(v=>v===1).length;
+    rates[t][0]+=det;
+    rates[t][1]+=sampled;
+  });
+
+  const out = {};
+  cells.forEach(c=>{
+    const t = type(c);
+    const rate = rates[t][1] ? rates[t][0]/rates[t][1] : 0.1;
+    const bonus = c.history.includes(1)?0.35:0;
+    const penalty = c.history.filter(v=>v===0).length*0.08;
+    out[c.id]=clamp(rate*1.6+bonus-penalty,0.03,0.97);
+  });
+
+  return out;
+}
+
+function repeatEstimate(cells){
+  const surveyed=cells.filter(c=>c.history.some(v=>v!==null));
+  if(!surveyed.length) return 0;
+
+  const anyDet=surveyed.filter(c=>c.history.some(v=>v===1)).length;
+  const 
+detEvents=surveyed.reduce((a,c)=>a+c.history.filter(v=>v===1).length,0);
+  const 
+totalVisits=surveyed.reduce((a,c)=>a+c.history.filter(v=>v!==null).length,0);
+
+  const naive=anyDet/surveyed.length;
+  const 
+pHat=totalVisits?clamp(detEvents/totalVisits,0.05,0.99):0.25;
+
+  return clamp(naive/pHat,0,1);
+}
+
+export default function App(){
+  const [design,setDesign]=useState("random");
+  const [cells,setCells]=useState(()=>makeWorld());
+  const [player,setPlayer]=useState({x:0,y:0});
+  const [visit,setVisit]=useState(0);
+  const [steps,setSteps]=useState(STEPS_PER_VISIT);
+  const [score,setScore]=useState(0);
+  const [showModel,setShowModel]=useState(false);
+  const [reveal,setReveal]=useState(false);
+
+  const est=useMemo(()=>estimatePsi(cells),[cells]);
+
+  function reset(d=design){
+    const fresh=makeWorld();
+    const start=fresh.find(c=>allowedByDesign(c,d))||fresh[0];
+    setCells(fresh);
+    setPlayer({x:start.x,y:start.y});
+    setVisit(0);
+    setSteps(STEPS_PER_VISIT);
+    setScore(0);
+    setReveal(false);
+    setShowModel(false);
+  }
+
+  function move(dx,dy){
+    const nx=Math.max(0,Math.min(GRID-1,player.x+dx));
+    const ny=Math.max(0,Math.min(GRID-1,player.y+dy));
+    survey(nx,ny);
+  }
+
+  function survey(x,y){
+    if(steps<=0) return;
+    const target=cells.find(c=>c.x===x&&c.y===y);
+    if(!allowedByDesign(target,design)) return;
+
+    setPlayer({x,y});
+
+    setCells(prev=>prev.map(c=>{
+      if(c.x!==x||c.y!==y) return c;
+      if(c.history[visit]!==null) return c;
+
+      const detected=c.occupied&&Math.random()<c.p;
+      const h=[...c.history];
+      h[visit]=detected?1:0;
+
+      if(detected) setScore(s=>s+8);
+
+      return {...c,history:h};
+    }));
+
+    setSteps(s=>s-1);
+  }
+
+  useEffect(()=>{
+    const key=e=>{
+      if(e.key==="ArrowUp")move(0,-1);
+      if(e.key==="ArrowDown")move(0,1);
+      if(e.key==="ArrowLeft")move(-1,0);
+      if(e.key==="ArrowRight")move(1,0);
+      if(e.key==="m")setShowModel(v=>!v);
+      if(e.key==="n")setNext();
+    };
+    window.addEventListener("keydown",key);
+    return ()=>window.removeEventListener("keydown",key);
+  });
+
+  function setNext(){
+    if(visit>=VISITS_TOTAL-1){setReveal(true);return;}
+    setVisit(v=>v+1);
+    setSteps(STEPS_PER_VISIT);
+  }
+
+  const sampled=cells.filter(c=>c.history.some(v=>v!==null));
+  const detected=cells.filter(c=>c.history.some(v=>v===1));
+  const naive=sampled.length?detected.length/sampled.length:0;
+  const rep=repeatEstimate(cells);
+  const trueOcc=cells.filter(c=>c.occupied).length/cells.length;
+
+  return(
+    <div 
+style={{padding:20,color:"white",background:"#0f172a",minHeight:"100vh"}}>
+      <h1>🐰 Occupancy Arcade</h1>
+
+      <div 
+style={{display:"grid",gridTemplateColumns:`repeat(${GRID},1fr)`,gap:6}}>
+        {cells.map(c=>{
+          let bg="#14532d";
+          if(showModel){
+            const e=est[c.id];
+            bg=e>0.7?"purple":e>0.4?"blue":"#334155";
+          }
+          if(c.history.some(v=>v===1)) bg="yellow";
+          if(reveal&&c.occupied) bg="green";
+          if(player.x===c.x&&player.y===c.y) bg="white";
+
+          return(
+            <div key={c.id}
+              
+style={{height:40,background:bg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              
+{player.x===c.x&&player.y===c.y?"🐰":c.history.some(v=>v===1)?"🥚":""}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{marginTop:10}}>
+        <button onClick={()=>move(0,-1)}>↑</button>
+        <button onClick={()=>move(0,1)}>↓</button>
+        <button onClick={()=>move(-1,0)}>←</button>
+        <button onClick={()=>move(1,0)}>→</button>
+      </div>
+
+      <div style={{marginTop:10}}>
+        <button onClick={setNext}>Next visit</button>
+        <button onClick={()=>reset()}>New game</button>
+      </div>
+
+      <div style={{marginTop:10}}>
+        <p>Naive: {naive.toFixed(2)}</= useState(0)
+
+  return (
+    <>
+      <section id="center">
+        <div className="hero">
+          <img src={heroImg} className="base" width="170" height="179" alt="" />
+          <img src={reactLogo} className="framework" alt="React logo" />
+          <img src={viteLogo} className="vite" alt="Vite logo" />
+        </div>
+        <div>
+          <h1>Get started</h1>
+          <p>
+            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+          </p>
+        </div>
+        <button
+          className="counter"
+          onClick={() => setCount((count) => count + 1)}
+        >
+          Count is {count}
+        </button>
+      </section>
+
+      <div className="ticks"></div>
+
+      <section id="next-steps">
+        <div id="docs">
+          <svg className="icon" role="presentation" aria-hidden="true">
+            <use href="/icons.svg#documentation-icon"></use>
+          </svg>
+          <h2>Documentation</h2>
+          <p>Your questions, answered</p>
+          <ul>
+            <li>
+              <a href="https://vite.dev/" target="_blank">
+                <img className="logo" src={viteLogo} alt="" />
+                Explore Vite
+              </a>
+            </li>
+            <li>
+              <a href="https://react.dev/" target="_blank">
+                <img className="button-icon" src={reactLogo} alt="" />
+                Learn more
+              </a>
+            </li>
+          </ul>
+        </div>
+        <div id="social">
+          <svg className="icon" role="presentation" aria-hidden="true">
+            <use href="/icons.svg#social-icon"></use>
+          </svg>
+          <h2>Connect with us</h2>
+          <p>Join the Vite community</p>
+          <ul>
+            <li>
+              <a href="https://github.com/vitejs/vite" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#github-icon"></use>
+                </svg>
+                GitHub
+              </a>
+            </li>
+            <li>
+              <a href="https://chat.vite.dev/" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#discord-icon"></use>
+                </svg>
+                Discord
+              </a>
+            </li>
+            <li>
+              <a href="https://x.com/vite_js" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#x-icon"></use>
+                </svg>
+                X.com
+              </a>
+            </li>
+            <li>
+              <a href="https://bsky.app/profile/vite.dev" target="_blank">
+                <svg
+                  className="button-icon"
+                  role="presentation"
+                  aria-hidden="true"
+                >
+                  <use href="/icons.svg#bluesky-icon"></use>
+                </svg>
+                Bluesky
+              </a>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <div className="ticks"></div>
+      <section id="spacer"></section>
+    </>
+  )
+}
+
+export default App
